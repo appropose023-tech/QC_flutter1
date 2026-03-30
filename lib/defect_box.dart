@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class DefectBox {
   final double x, y, w, h;
 
