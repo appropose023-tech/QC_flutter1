@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 
 class DefectBox {
   final double x, y, w, h;
 
-  DefectBox(this.x, this.y, this.w, this.h);
+  DefectBox({required this.x, required this.y, required this.w, required this.h});
 
-  // Scale from golden (4032×3024) → camera preview
-  Rect scaleToPreview(double previewW, double previewH) {
-    const double goldenW = 4032;
-    const double goldenH = 3024;
+  // BACKEND image resolution (your actual PCB image)
+  static const double backendWidth = 3679;
+  static const double backendHeight = 1717;
 
-    double scaleX = previewW / goldenW;
-    double scaleY = previewH / goldenH;
+  // Convert backend-coordinates → camera-preview coordinates
+  Rect scaleToPreview(double previewWidth, double previewHeight) {
+    double scaleX = previewWidth / backendWidth;
+    double scaleY = previewHeight / backendHeight;
 
     return Rect.fromLTWH(
       x * scaleX,
