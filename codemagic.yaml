@@ -1,0 +1,40 @@
+workflows:
+  build-app:
+    name: PCB Inspector
+    max_build_duration: 60
+    environment:
+      flutter: stable
+
+    scripts:
+      - name: Create Flutter project
+        script: |
+          flutter create app
+          cp -r lib app/
+
+      - name: Write pubspec.yaml
+        script: |
+          cat > app/pubspec.yaml << 'EOF'
+          name: pcb_inspector
+          publish_to: "none"
+
+          environment:
+            sdk: ">=3.0.0 <4.0.0"
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            camera: ^0.10.5+5
+            http: ^1.2.0
+
+          flutter:
+            uses-material-design: true
+          EOF
+
+      - name: Build APK
+        script: |
+          cd app
+          flutter pub get
+          flutter build apk --release
+
+    artifacts:
+      - app/build/app/outputs/flutter-apk/app-release.apk
