@@ -1,6 +1,6 @@
 workflows:
   build-app:
-    name: PCB Inspector
+    name: Build Flutter APK
     max_build_duration: 60
     environment:
       flutter: stable
@@ -10,31 +10,45 @@ workflows:
         script: |
           flutter create app
           cp -r lib app/
+          if [ -d "assets" ]; then cp -r assets app/; fi
 
-      - name: Write pubspec.yaml
+      - name: Overwrite pubspec.yaml
         script: |
           cat > app/pubspec.yaml << 'EOF'
           name: pcb_inspector
+          description: Live PCB Inspection App
           publish_to: "none"
+          version: 1.0.0+1
 
           environment:
-            sdk: ">=3.0.0 <4.0.0"
+            sdk: '>=3.0.0 <4.0.0'
 
           dependencies:
             flutter:
               sdk: flutter
             camera: ^0.10.5+5
             http: ^1.2.0
+            path_provider: ^2.1.2
 
           flutter:
             uses-material-design: true
+            assets:
+              - assets/
           EOF
+
+      - name: Run flutter pub get
+        script: |
+          cd app
+          flutter pub get
 
       - name: Build APK
         script: |
           cd app
-          flutter pub get
           flutter build apk --release
 
     artifacts:
       - app/build/app/outputs/flutter-apk/app-release.apk
+
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
