@@ -1,24 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'defect_box.dart';
 
 class ApiService {
-  static const String baseUrl = "http://104.154.76.47:8000";
+  static const String url = "http://YOUR_SERVER/api/process";
 
-  Future<Map<String, dynamic>?> sendToServer(File imageFile) async {
-    final uri = Uri.parse("$baseUrl/inspect/");
+  static Future<List<DefectBox>> uploadImage(File file) async {
+    var req = http.MultipartRequest("POST", Uri.parse(url));
+    req.files.add(await http.MultipartFile.fromPath("image", file.path));
 
-    final request = http.MultipartRequest("POST", uri);
-    request.files.add(await http.MultipartFile.fromPath("file", imageFile.path));
+    final res = await req.send();
 
-    final response = await request.send();
-    final respStr = await response.stream.bytesToString();
-
-    if (response.statusCode == 200) {
-      return json.decode(respStr);
+    if (res.statusCode != 200) {
+      print("API error: ${res.statusCode}");
+      return [];
     }
 
-    print("Server error: $respStr");
-    return null;
+    final body = await res.stream.bytesToString();
+
+    final decoded = jsonDecode(body);
+
+    return (decoded["defects"] as List)
+        .map((d) => DefectBox.fromJson(d))
+        .toList();
   }
 }
