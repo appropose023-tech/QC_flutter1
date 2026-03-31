@@ -31,7 +31,7 @@ class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
     await controller!.initialize();
     setState(() {});
 
-    Timer.periodic(const Duration(seconds: 2), (_) => autoCapture());
+    Timer.periodic(const Duration(seconds: 1), (_) => autoCapture());
   }
 
   Future<void> autoCapture() async {
@@ -51,16 +51,17 @@ class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
         final response = await ApiService().sendToServer(File(imgPath));
 
         if (response != null && mounted) {
-          List data = response["defects"];
+          List<dynamic> data = response["defects"];
 
-          defects = data
-              .map((d) => DefectBox(
-                    (d["x"] as num).toDouble(),
-                    (d["y"] as num).toDouble(),
-                    (d["w"] as num).toDouble(),
-                    (d["h"] as num).toDouble(),
-                  ))
-              .toList();
+          /// *** FIXED: Convert List<dynamic> → List<DefectBox> using named params ***
+          defects = data.map<DefectBox>((d) {
+            return DefectBox(
+              x: (d["x"] as num).toDouble(),
+              y: (d["y"] as num).toDouble(),
+              w: (d["w"] as num).toDouble(),
+              h: (d["h"] as num).toDouble(),
+            );
+          }).toList();
 
           setState(() {});
         }
@@ -75,39 +76,39 @@ class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
   @override
   Widget build(BuildContext context) {
     if (controller == null || !controller!.value.isInitialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          double previewW = constraints.maxWidth;
-          double previewH = constraints.maxHeight;
+      body: Stack(
+        children: [
+          CameraPreview(controller!),
 
-          return Stack(
-            children: [
-              CameraPreview(controller!),
+          /// Overlay rectangles
+          LayoutBuilder(
+            builder: (context, constraints) {
+              double previewW = constraints.maxWidth;
+              double previewH = constraints.maxHeight;
 
-              // Overlay defect rectangles
-              ...defects.map((d) {
-                Rect r = d.scaleToPreview(previewW, previewH);
-                return Positioned(
-                  left: r.left,
-                  top: r.top,
-                  width: r.width,
-                  height: r.height,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.red, width: 2),
+              return Stack(
+                children: defects.map((d) {
+                  Rect r = d.scaleToPreview(previewW, previewH);
+                  return Positioned(
+                    left: r.left,
+                    top: r.top,
+                    width: r.width,
+                    height: r.height,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red, width: 2),
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ],
-          );
-        },
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
