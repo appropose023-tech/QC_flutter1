@@ -90,7 +90,7 @@ class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
             children: [
               CameraPreview(controller!),
 
-              // DEFECT OVERLAY
+              // Overlay defect rectangles
               ...defects.map((d) {
                 Rect r = d.scaleToPreview(previewW, previewH);
                 return Positioned(
