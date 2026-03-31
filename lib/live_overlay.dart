@@ -1,23 +1,26 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'api_service.dart';
 import 'defect_box.dart';
 
 class LiveOverlayScreen extends StatefulWidget {
+  const LiveOverlayScreen({super.key});
+
   @override
   State<LiveOverlayScreen> createState() => _LiveOverlayScreenState();
 }
 
 class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
   CameraController? controller;
-  List<CameraDescription>? cams;
+  List<CameraDescription> cameras = [];
+  bool isProcessing = false;
 
   List<DefectBox> defects = [];
-  bool processing = false;
+  double previewW = 1;
+  double previewH = 1;
 
   @override
   void initState() {
@@ -26,89 +29,89 @@ class _LiveOverlayScreenState extends State<LiveOverlayScreen> {
   }
 
   Future<void> initCamera() async {
-    cams = await availableCameras();
-    controller = CameraController(cams![0], ResolutionPreset.high);
-    await controller!.initialize();
-    setState(() {});
+    cameras = await availableCameras();
+    controller = CameraController(
+      cameras.first,
+      ResolutionPreset.max,
+      enableAudio: false,
+    );
 
-    Timer.periodic(const Duration(seconds: 1), (_) => autoCapture());
+    await controller!.initialize();
+
+    if (!mounted) return;
+
+    // Start periodic frame capture
+    Timer.periodic(const Duration(seconds: 2), (_) => processFrame());
+
+    setState(() {});
   }
 
-  Future<void> autoCapture() async {
-    if (controller == null || !controller!.value.isInitialized) return;
-    if (processing) return;
-
-    processing = true;
-
-    try {
-      final Directory tempDir = await getTemporaryDirectory();
-      final String imgPath = "${tempDir.path}/live.jpg";
-
-      await controller!.takePicture().then((XFile file) async {
-        File imgFile = File(file.path);
-        imgFile.copySync(imgPath);
-
-        final response = await ApiService().sendToServer(File(imgPath));
-
-        if (response != null && mounted) {
-          List<dynamic> data = response["defects"];
-
-          /// *** FIXED: Convert List<dynamic> → List<DefectBox> using named params ***
-          defects = data.map<DefectBox>((d) {
-            return DefectBox(
-              x: (d["x"] as num).toDouble(),
-              y: (d["y"] as num).toDouble(),
-              w: (d["w"] as num).toDouble(),
-              h: (d["h"] as num).toDouble(),
-            );
-          }).toList();
-
-          setState(() {});
-        }
-      });
-    } catch (e) {
-      print("Error: $e");
+  Future<void> processFrame() async {
+    if (controller == null || isProcessing || !controller!.value.isInitialized) {
+      return;
     }
 
-    processing = false;
+    isProcessing = true;
+
+    try {
+      XFile file = await controller!.takePicture();
+      File imgFile = File(file.path);
+
+      // Send to backend
+      List<DefectBox> result = await ApiService.uploadImage(imgFile);
+
+      setState(() {
+        defects = result;
+      });
+    } catch (e) {
+      print("Frame processing error: $e");
+    }
+
+    isProcessing = false;
+  }
+
+  @override
+  void dispose() {
+    controller?.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (controller == null || !controller!.value.isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
-      body: Stack(
-        children: [
-          CameraPreview(controller!),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          previewW = constraints.maxWidth;
+          previewH = constraints.maxHeight;
 
-          /// Overlay rectangles
-          LayoutBuilder(
-            builder: (context, constraints) {
-              double previewW = constraints.maxWidth;
-              double previewH = constraints.maxHeight;
+          return Stack(
+            children: [
+              CameraPreview(controller!),
 
-              return Stack(
-                children: defects.map((d) {
-                  Rect r = d.scaleToPreview(previewW, previewH);
-                  return Positioned(
-                    left: r.left,
-                    top: r.top,
+              // Draw defect boxes
+              ...defects.map((d) {
+                Rect r = d.scaleToPreview(previewW, previewH);
+                return Positioned(
+                  left: r.left,
+                  top: r.top,
+                  child: Container(
                     width: r.width,
                     height: r.height,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.red, width: 2),
-                      ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.red, width: 3),
                     ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
+                  ),
+                );
+              }).toList()
+            ],
+          );
+        },
       ),
     );
   }
